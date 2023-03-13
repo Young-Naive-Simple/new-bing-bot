@@ -36,5 +36,5 @@ jobs:
         username: ${{ secrets.SSH_USER }}
         key: ${{ secrets.SSH_KEY }}
         script: |
-          cd /home/colin/chatgpt/chatgpt
+          cd /home/colin/new-bing-bot
           bash scripts/run_docker_this.sh # different from run_docker.sh !
