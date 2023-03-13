@@ -11,4 +11,4 @@ COPY --from=builder /app/bin/telegram_bot /usr/local/bin/telegram_bot
 ENV TELOXIDE_TOKEN=
 ENV API_HOST=
 ENV RUST_LOG=debug
-CMD ["myapp"]
+CMD ["telegram_bot"]
