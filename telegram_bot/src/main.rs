@@ -336,7 +336,7 @@ async fn handle_cmd(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> 
         }
         Command::Cookie(cookie) => {
             let mut id2cookie = CHATID_COOKIE.lock().await;
-            id2cookie.entry(msg.chat.id).or_insert(cookie.clone());
+            id2cookie.insert(msg.chat.id, cookie.clone());
             #[allow(deprecated)]
             let sent_id = bot
                 .send_message(msg.chat.id, format!("Your cookie is set to `{cookie}` ."))
