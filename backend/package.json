@@ -1,0 +1,17 @@
+{
+  "name": "backend",
+  "private": true,
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@tinyhttp/app": "latest",
+    "@tinyhttp/logger": "latest",
+    "bing-chat": "^0.2.1",
+    "dotenv-safe": "^8.2.0",
+    "milliparsec": "^2.2.2",
+    "ora": "^6.1.2",
+    "yaml": "^2.2.1"
+  },
+  "type": "module"
+}

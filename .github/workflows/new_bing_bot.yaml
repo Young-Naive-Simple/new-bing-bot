@@ -1,0 +1,40 @@
+name: chatgpt-web
+
+on:
+  push:
+    branches:
+      - 'main'
+
+jobs:
+
+  build-api:
+    name: build new-bing API docker
+    uses: ./.github/workflows/build_push_docker.yaml
+    with:
+      build_context: backend
+      img_name: new-bing-api
+    secrets: inherit
+
+  build-bot:
+    name: build new-bing telegram bot docker
+    uses: ./.github/workflows/build_push_docker.yaml
+    with:
+      build_context: telegram_bot
+      img_name: new-bing-bot
+    secrets: inherit
+
+  deploy:
+    name: deploy docker via SSH
+    needs:
+      - build-api
+      - build-bot
+    runs-on: ubuntu-latest
+    steps:
+    - uses: appleboy/ssh-action@v0.1.8
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_KEY }}
+        script: |
+          cd /home/colin/chatgpt/chatgpt
+          bash scripts/run_docker_this.sh # different from run_docker.sh !
