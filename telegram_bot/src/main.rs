@@ -1,24 +1,22 @@
-#![feature(io_error_other)]
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use serde_json::json;
-use std::{collections::HashMap, env, io, sync::Arc, time};
+use std::{collections::HashMap, env, io, time};
 use teloxide::payloads::SendMessageSetters;
 use teloxide::utils::command;
-use tokio::sync::Mutex;
 
 use teloxide::types::{
     InlineKeyboardButton, InlineKeyboardMarkup, MessageEntityKind, MessageId, ParseMode,
 };
 use teloxide::{prelude::*, utils::command::BotCommands};
+use tokio::sync::Mutex;
 
 static BOT_USERNAME: &str = "naive_bing_bot";
-lazy_static! {
-    static ref API_HOST: String = env::var("API_HOST").unwrap();
-    static ref CHATID_COOKIE: Arc<Mutex<HashMap<ChatId, String>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-    static ref MSGID_LASTRESP: Arc<Mutex<HashMap<MessageId, serde_json::Value>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-}
+
+static API_HOST: Lazy<String> = Lazy::new(|| env::var("API_HOST").unwrap());
+static CHATID_COOKIE: Lazy<Mutex<HashMap<ChatId, String>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+static MSGID_LASTRESP: Lazy<Mutex<HashMap<MessageId, serde_json::Value>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 
 fn msg_mentioned(msg: &Message, username: &str) -> bool {
     match msg.parse_entities() {
@@ -98,7 +96,7 @@ async fn main() {
 async fn handle_msg(bot: Bot, msg: Message) -> ResponseResult<()> {
     let msg_str = msg
         .text()
-        .ok_or(io::Error::other("msg.text is empty"))?
+        .ok_or(io::Error::new(io::ErrorKind::Other, "msg.text is empty"))?
         .replace(("@".to_string() + BOT_USERNAME).as_str(), "")
         .trim()
         .to_string();
@@ -131,7 +129,7 @@ async fn handle_msg(bot: Bot, msg: Message) -> ResponseResult<()> {
     // send HTTP POST to http://localhost:3000/newbing/convo with JSON body:
     // { "prompt": "hello new bing", "cookie": "xxx", "last_resp": {...} }
     let resp = reqwest::Client::new()
-        .post(format!("http://{}:3000/newbing/convo", API_HOST.as_str()))
+        .post(format!("http://{}:3000/newbing/convo", *API_HOST))
         .json(&json!({
             "prompt": msg_str,
             "cookie": cookie,
@@ -147,15 +145,17 @@ async fn handle_msg(bot: Bot, msg: Message) -> ResponseResult<()> {
     let resp = &resp["resp"];
     let mut ans = resp["text"]
         .as_str()
-        .ok_or(io::Error::other(format!(
-            "resp has no String typed field \"text\": {resp}"
-        )))?
+        .ok_or(io::Error::new(
+            io::ErrorKind::Other,
+            format!("resp has no String typed field \"text\": {resp}"),
+        ))?
         .to_owned();
     let attrs = resp["detail"]["sourceAttributions"]
         .as_array()
-        .ok_or(io::Error::other(format!(
-            "resp[\"detail\"][\"sourceAttributions\"] not found"
-        )))?;
+        .ok_or(io::Error::new(
+            io::ErrorKind::Other,
+            format!("resp[\"detail\"][\"sourceAttributions\"] not found"),
+        ))?;
     if attrs.len() > 0 {
         ans.push_str("\n\n");
     }
@@ -181,7 +181,7 @@ async fn handle_msg(bot: Bot, msg: Message) -> ResponseResult<()> {
 async fn handle_msg_on_prog(bot: Bot, msg: Message) -> ResponseResult<()> {
     let msg_str = msg
         .text()
-        .ok_or(io::Error::other("msg.text is empty"))?
+        .ok_or(io::Error::new(io::ErrorKind::Other, "msg.text is empty"))?
         .replace(("@".to_string() + BOT_USERNAME).as_str(), "")
         .trim()
         .to_string();
@@ -223,10 +223,7 @@ async fn handle_msg_on_prog(bot: Bot, msg: Message) -> ResponseResult<()> {
         // send HTTP POST to http://localhost:3000/newbing/onprogress with JSON body:
         // { "prompt": "hello new bing", "cookie": "xxx", "last_resp": {...} }
         let resp = reqwest::Client::new()
-            .post(format!(
-                "http://{}:3000/newbing/onprogress",
-                API_HOST.as_str()
-            ))
+            .post(format!("http://{}:3000/newbing/onprogress", *API_HOST))
             .json(&json!({
                 "prompt": msg_str,
                 "cookie": cookie,
@@ -241,9 +238,10 @@ async fn handle_msg_on_prog(bot: Bot, msg: Message) -> ResponseResult<()> {
         let resp = &resp["resp"];
         let mut ans = resp["text"]
             .as_str()
-            .ok_or(io::Error::other(format!(
-                "resp has no String typed field \"text\": {resp:#?}"
-            )))?
+            .ok_or(io::Error::new(
+                io::ErrorKind::Other,
+                format!("resp has no String typed field \"text\": {resp:#?}"),
+            ))?
             .to_owned();
 
         // append attributions
@@ -286,9 +284,10 @@ async fn handle_msg_on_prog(bot: Bot, msg: Message) -> ResponseResult<()> {
 
         last_resp = resp.clone();
         if ans.len() > 0 {
-            let done = resp["done"].as_bool().ok_or(io::Error::other(format!(
-                "resp has no bool typed field \"done\""
-            )))?;
+            let done = resp["done"].as_bool().ok_or(io::Error::new(
+                io::ErrorKind::Other,
+                "resp has no bool typed field \"done\"",
+            ))?;
             let _ = bot
                 .edit_message_text(msg.chat.id, sent_id, ans.as_str())
                 .await;
