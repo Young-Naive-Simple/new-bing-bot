@@ -1,11 +1,10 @@
+use anyhow::{Context, Result};
 use once_cell::sync::Lazy;
 use serde_json::json;
-use std::{collections::HashMap, env, io, time};
+use std::{collections::HashMap, env, time};
 use teloxide::payloads::SendMessageSetters;
-
-use anyhow::{anyhow, Context, Result};
 use teloxide::types::{
-    ChatAction, InlineKeyboardButton, InlineKeyboardMarkup, MessageEntityKind, MessageId, ParseMode,
+    InlineKeyboardButton, InlineKeyboardMarkup, MessageEntityKind, MessageId, ParseMode,
 };
 use teloxide::{prelude::*, utils::command::BotCommands};
 use tokio::sync::Mutex;
@@ -354,14 +353,17 @@ async fn handle_cmd(_cfg: ConfigParams, bot: Bot, msg: Message, cmd: Command) ->
             let mut id2cookie = CHATID_COOKIE.lock().await;
             id2cookie.insert(msg.chat.id, cookie.clone());
             #[allow(deprecated)]
-            let sent_id = bot
-                .send_message(msg.chat.id, format!("Your cookie is set to `{cookie}` ."))
+            let id_future = bot
+                .send_message(msg.chat.id, "Your cookie is updated.")
                 .reply_to_message_id(msg.id)
-                .parse_mode(ParseMode::Markdown)
-                .await?
-                .id;
-            bot.delete_message(msg.chat.id, sent_id).await?;
-            bot.delete_message(msg.chat.id, msg.id).await?;
+                .parse_mode(ParseMode::Markdown);
+            bot.delete_message(msg.chat.id, msg.id).send().await?;
+            tokio::spawn(async move {
+                let msg_id = id_future.await?.id;
+                tokio::time::sleep(time::Duration::from_secs(5)).await;
+                bot.delete_message(msg.chat.id, msg_id).send().await?;
+                Ok::<(), anyhow::Error>(())
+            });
         }
         Command::Test => {
             log::info!("received: {msg:#?}");
