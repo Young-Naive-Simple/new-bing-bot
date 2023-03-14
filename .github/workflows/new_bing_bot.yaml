@@ -37,4 +37,4 @@ jobs:
         key: ${{ secrets.SSH_KEY }}
         script: |
           cd /home/colin/new-bing-bot
-          bash scripts/run_docker_this.sh # different from run_docker.sh !
+          bash scripts/run_compose.sh

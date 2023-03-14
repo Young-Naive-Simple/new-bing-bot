@@ -2,7 +2,7 @@
 
 set -ex
 
-echo $GH_TOKEN | docker login ghcr.io -u $GH_USER --password-stdin
+# echo $GH_TOKEN | docker login ghcr.io -u $GH_USER --password-stdin
 docker pull ghcr.io/young-naive-simple/new-bing-api:latest
 docker pull ghcr.io/young-naive-simple/new-bing-bot:latest
 
@@ -32,4 +32,5 @@ docker run -d --name new-bing-bot --restart=always \
     --env API_HOST=new-bing-api \
     ghcr.io/young-naive-simple/new-bing-bot:latest
 
+yes | docker image prune
 docker ps -a

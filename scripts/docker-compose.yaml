@@ -1,0 +1,20 @@
+version: "3"
+
+services:
+  api:
+    container_name: new-bing-api
+    image: ghcr.io/young-naive-simple/new-bing-api:latest
+    restart: unless-stopped
+    volumes:
+      - /tmp/new_bing_cookies.yaml:/app/cookies.yaml
+      - /etc/localtime:/etc/localtime
+  bot:
+    container_name: new-bing-bot
+    image: ghcr.io/young-naive-simple/new-bing-bot:latest
+    restart: unless-stopped
+    volumes:
+      - /tmp/new_bing_cookies.yaml:/app/cookies.yaml
+      - /etc/localtime:/etc/localtime
+    environment:
+      - API_HOST=api
+      - TELOXIDE_TOKEN
