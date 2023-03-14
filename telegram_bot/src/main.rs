@@ -39,7 +39,7 @@ fn msg_mentioned(msg: &Message, username: &str) -> bool {
 
 fn msg_reply_to_id(msg: &Message) -> Option<UserId> {
     msg.reply_to_message()
-        .and_then(|replied| replied.from().map(|replied_from| replied_from.id))
+        .map(|replied| replied.from().map(|replied_from| replied_from.id)).flatten()
 }
 
 #[tokio::main]
