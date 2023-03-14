@@ -5,7 +5,7 @@ use teloxide::payloads::SendMessageSetters;
 use teloxide::utils::command;
 
 use teloxide::types::{
-    InlineKeyboardButton, InlineKeyboardMarkup, MessageEntityKind, MessageId, ParseMode,
+    InlineKeyboardButton, InlineKeyboardMarkup, MessageEntityKind, MessageId, ParseMode, ChatAction,
 };
 use teloxide::{prelude::*, utils::command::BotCommands};
 use tokio::sync::Mutex;
@@ -210,6 +210,7 @@ async fn handle_msg_on_prog(bot: Bot, msg: Message) -> ResponseResult<()> {
             json!({})
         }
     };
+    tokio::spawn(bot.send_chat_action(msg.chat.id, ChatAction::Typing).send());
 
     #[allow(deprecated)]
     let sent_id = bot
