@@ -9,7 +9,7 @@ docker pull ghcr.io/young-naive-simple/new-bing-bot:latest
 set +e
 docker kill new-bing-api new-bing-bot
 docker rm new-bing-api new-bing-bot
-docker rm new-bing-net
+docker network rm new-bing-net
 set -e
 
 echo 'cookies:
@@ -17,6 +17,7 @@ echo 'cookies:
   - 456
 ' > /tmp/new_bing_cookies.yaml
 
+docker network create new-bing-net
 docker run -d --name new-bing-api --restart=always \
     --net new-bing-net \
     -p 127.0.0.1:30180:3000 \

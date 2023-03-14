@@ -3,6 +3,7 @@ use lazy_static::lazy_static;
 use serde_json::json;
 use std::{collections::HashMap, env, io, sync::Arc, time};
 use teloxide::payloads::SendMessageSetters;
+use teloxide::utils::command;
 use tokio::sync::Mutex;
 
 use teloxide::types::{
@@ -65,7 +66,9 @@ async fn main() {
         .branch(
             // Filtering allow you to filter updates by some condition.
             dptree::filter(|msg: Message| {
-                msg_mentioned(&msg, BOT_USERNAME) || msg_reply_to_username(&msg) == BOT_USERNAME
+                msg.chat.is_private()
+                    || msg_mentioned(&msg, BOT_USERNAME)
+                    || msg_reply_to_username(&msg) == BOT_USERNAME
             })
             // An endpoint is the last update handler.
             .endpoint(handle_msg_on_prog),
@@ -208,8 +211,13 @@ async fn handle_msg_on_prog(bot: Bot, msg: Message) -> ResponseResult<()> {
         }
     };
 
-    let mut first_loop = true;
-    let mut sent_id = MessageId(0);
+    #[allow(deprecated)]
+    let sent_id = bot
+        .send_message(msg.chat.id, "_(waiting for response...)_")
+        .parse_mode(ParseMode::Markdown)
+        .reply_to_message_id(msg.id)
+        .await?
+        .id;
     loop {
         log::info!("on progress loop...");
         // send HTTP POST to http://localhost:3000/newbing/onprogress with JSON body:
@@ -281,18 +289,9 @@ async fn handle_msg_on_prog(bot: Bot, msg: Message) -> ResponseResult<()> {
             let done = resp["done"].as_bool().ok_or(io::Error::other(format!(
                 "resp has no bool typed field \"done\""
             )))?;
-            if first_loop {
-                first_loop = false;
-                sent_id = bot
-                    .send_message(msg.chat.id, ans.as_str())
-                    .reply_to_message_id(msg.id)
-                    .await?
-                    .id;
-            } else {
-                let _ = bot
-                    .edit_message_text(msg.chat.id, sent_id, ans.as_str())
-                    .await;
-            }
+            let _ = bot
+                .edit_message_text(msg.chat.id, sent_id, ans.as_str())
+                .await;
             if done {
                 #[allow(deprecated)]
                 let _ = bot
@@ -319,9 +318,11 @@ async fn handle_msg_on_prog(bot: Bot, msg: Message) -> ResponseResult<()> {
     description = "These commands are supported:"
 )]
 enum Command {
+    #[command(description = "use /help to see usage.")]
+    Start,
     #[command(description = "display this text.")]
     Help,
-    #[command(description = "set a cookie.")]
+    #[command(description = "set a cookie by `/cookie <your cookie>`")]
     Cookie(String),
     #[command(description = "show a test message.")]
     Test,
@@ -330,11 +331,26 @@ enum Command {
 async fn handle_cmd(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
     log::info!("cmd: {:#?} , chatid: {}", cmd, msg.chat.id);
     match cmd {
+        Command::Start => {
+            bot.send_message(msg.chat.id, "use /help to see usage.")
+                .await?;
+        }
         Command::Help => {
-            bot.send_message(msg.chat.id, Command::descriptions().to_string())
+            let mut help_msg = Command::descriptions().to_string();
+            help_msg.push_str(
+                "\n\ncookie is the `_U` cookie of [www.bing.com](https://www.bing.com). Do NOT include `_U=`.\n\
+                \nIn private chat, the bot responds to messages directly.\n\
+                In group, the bot only responds to messages mentioning (at) it.\n\
+                In both case, reply to message of the latest response to continue a conversation.\n\
+                "
+            );
+            #[allow(deprecated)]
+            bot.send_message(msg.chat.id, help_msg)
+                .parse_mode(ParseMode::Markdown)
                 .await?;
         }
         Command::Cookie(cookie) => {
+            let cookie = cookie.trim().to_string();
             let mut id2cookie = CHATID_COOKIE.lock().await;
             id2cookie.insert(msg.chat.id, cookie.clone());
             #[allow(deprecated)]
