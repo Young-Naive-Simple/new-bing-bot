@@ -3,7 +3,7 @@ use serde_json::json;
 use std::{collections::HashMap, env, io, time};
 use teloxide::payloads::SendMessageSetters;
 
-use anyhow::{anyhow, Result, Context};
+use anyhow::{anyhow, Context, Result};
 use teloxide::types::{
     ChatAction, InlineKeyboardButton, InlineKeyboardMarkup, MessageEntityKind, MessageId, ParseMode,
 };
@@ -18,6 +18,7 @@ static MSGID_LASTRESP: Lazy<Mutex<HashMap<MessageId, serde_json::Value>>> =
 
 #[derive(Clone, Debug)]
 struct ConfigParams {
+    bot_id: UserId,
     bot_username: String,
 }
 
@@ -37,16 +38,10 @@ fn msg_mentioned(msg: &Message, username: &str) -> bool {
     }
 }
 
-fn msg_reply_to_username(msg: &Message) -> &str {
+fn msg_reply_to_id(msg: &Message) -> Option<UserId> {
     match msg.reply_to_message() {
-        Some(replied) => match replied.from() {
-            Some(replied_from) => match replied_from.username.as_ref() {
-                Some(username) => username.as_str(),
-                None => "",
-            },
-            None => "",
-        },
-        None => "",
+        Some(replied) => replied.from().map(|replied_from| replied_from.id),
+        None => None,
     }
 }
 
@@ -58,6 +53,7 @@ async fn main() {
     let bot = Bot::from_env();
     let cfg_params = ConfigParams {
         bot_username: bot.get_me().await.unwrap().username().to_string(),
+        bot_id: bot.get_me().send().await.unwrap().id,
     };
     let handler = Update::filter_message()
         .branch(
@@ -72,7 +68,7 @@ async fn main() {
             dptree::filter(|cfg: ConfigParams, msg: Message| {
                 msg.chat.is_private()
                     || msg_mentioned(&msg, &cfg.bot_username)
-                    || msg_reply_to_username(&msg) == cfg.bot_username
+                    || msg_reply_to_id(&msg) == Some(cfg.bot_id)
             })
             // An endpoint is the last update handler.
             .endpoint(handle_msg_on_prog),
@@ -105,7 +101,7 @@ async fn handle_msg(cfg: ConfigParams, bot: Bot, msg: Message) -> Result<()> {
     let msg_str = msg
         .text()
         .context("msg.text is empty")?
-        .replace(("@".to_string() + &cfg.bot_username).as_str(), "")
+        .replace(&format!("@{}", cfg.bot_username), "")
         .trim()
         .to_string();
     let id2cookie = CHATID_COOKIE.lock().await;
@@ -246,7 +242,9 @@ async fn handle_msg_on_prog(cfg: ConfigParams, bot: Bot, msg: Message) -> Result
         let resp = &resp["resp"];
         let mut ans = resp["text"]
             .as_str()
-            .context(format!("resp has no String typed field \"text\": {resp:#?}"))?
+            .context(format!(
+                "resp has no String typed field \"text\": {resp:#?}"
+            ))?
             .to_owned();
 
         // append attributions
