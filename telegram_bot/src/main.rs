@@ -38,10 +38,7 @@ fn msg_mentioned(msg: &Message, username: &str) -> bool {
 }
 
 fn msg_reply_to_id(msg: &Message) -> Option<UserId> {
-    match msg.reply_to_message() {
-        Some(replied) => replied.from().map(|replied_from| replied_from.id),
-        None => None,
-    }
+    msg.reply_to_message().and_then(|replied| replied.from().map(|replied_from| replied_from.id))
 }
 
 #[tokio::main]
