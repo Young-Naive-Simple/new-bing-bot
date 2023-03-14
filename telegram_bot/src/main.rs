@@ -3,6 +3,7 @@ use serde_json::json;
 use std::{collections::HashMap, env, io, time};
 use teloxide::payloads::SendMessageSetters;
 
+use anyhow::{anyhow, Result, Context};
 use teloxide::types::{
     ChatAction, InlineKeyboardButton, InlineKeyboardMarkup, MessageEntityKind, MessageId, ParseMode,
 };
@@ -100,10 +101,10 @@ async fn main() {
 
 #[deprecated]
 #[allow(dead_code)]
-async fn handle_msg(cfg: ConfigParams, bot: Bot, msg: Message) -> ResponseResult<()> {
+async fn handle_msg(cfg: ConfigParams, bot: Bot, msg: Message) -> Result<()> {
     let msg_str = msg
         .text()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "msg.text is empty"))?
+        .context("msg.text is empty")?
         .replace(("@".to_string() + &cfg.bot_username).as_str(), "")
         .trim()
         .to_string();
@@ -155,21 +156,11 @@ async fn handle_msg(cfg: ConfigParams, bot: Bot, msg: Message) -> ResponseResult
     let resp = &resp["resp"];
     let mut ans = resp["text"]
         .as_str()
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("resp has no String typed field \"text\": {resp}"),
-            )
-        })?
+        .context(format!("resp has no String typed field \"text\": {resp}"))?
         .to_owned();
     let attrs = resp["detail"]["sourceAttributions"]
         .as_array()
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                "resp[\"detail\"][\"sourceAttributions\"] not found".to_string(),
-            )
-        })?;
+        .context("resp[\"detail\"][\"sourceAttributions\"] not found")?;
     if !attrs.is_empty() {
         ans.push_str("\n\n");
     }
@@ -192,10 +183,10 @@ async fn handle_msg(cfg: ConfigParams, bot: Bot, msg: Message) -> ResponseResult
     Ok(())
 }
 
-async fn handle_msg_on_prog(cfg: ConfigParams, bot: Bot, msg: Message) -> ResponseResult<()> {
+async fn handle_msg_on_prog(cfg: ConfigParams, bot: Bot, msg: Message) -> Result<()> {
     let msg_str = msg
         .text()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "msg.text is empty"))?
+        .context("msg.text is empty")?
         .replace(("@".to_string() + &cfg.bot_username).as_str(), "")
         .trim()
         .to_string();
@@ -255,12 +246,7 @@ async fn handle_msg_on_prog(cfg: ConfigParams, bot: Bot, msg: Message) -> Respon
         let resp = &resp["resp"];
         let mut ans = resp["text"]
             .as_str()
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("resp has no String typed field \"text\": {resp:#?}"),
-                )
-            })?
+            .context(format!("resp has no String typed field \"text\": {resp:#?}"))?
             .to_owned();
 
         // append attributions
@@ -303,12 +289,9 @@ async fn handle_msg_on_prog(cfg: ConfigParams, bot: Bot, msg: Message) -> Respon
 
         last_resp = resp.clone();
         if !ans.is_empty() {
-            let done = resp["done"].as_bool().ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    "resp has no bool typed field \"done\"",
-                )
-            })?;
+            let done = resp["done"]
+                .as_bool()
+                .context("resp has no bool typed field \"done\"")?;
             let _ = bot
                 .edit_message_text(msg.chat.id, sent_id, ans.as_str())
                 .await;
@@ -348,12 +331,7 @@ enum Command {
     Test,
 }
 
-async fn handle_cmd(
-    _cfg: ConfigParams,
-    bot: Bot,
-    msg: Message,
-    cmd: Command,
-) -> ResponseResult<()> {
+async fn handle_cmd(_cfg: ConfigParams, bot: Bot, msg: Message, cmd: Command) -> Result<()> {
     log::info!("cmd: {:#?} , chatid: {}", cmd, msg.chat.id);
     match cmd {
         Command::Start => {
@@ -380,7 +358,7 @@ async fn handle_cmd(
             id2cookie.insert(msg.chat.id, cookie.clone());
             #[allow(deprecated)]
             let sent_id = bot
-                .send_message(msg.chat.id, format!("Your cookie is set to `{cookie}` ."))
+                .send_message(msg.chat.id, "Your cookie is set to `{cookie}` .")
                 .reply_to_message_id(msg.id)
                 .parse_mode(ParseMode::Markdown)
                 .await?
