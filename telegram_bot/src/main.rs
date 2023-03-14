@@ -4,9 +4,7 @@ use std::{collections::HashMap, env, io, time};
 use teloxide::payloads::SendMessageSetters;
 
 use teloxide::types::{
-    ChatAction, InlineKeyboardButton, 
-    InlineKeyboardMarkup,
-     MessageEntityKind, MessageId, ParseMode,
+    ChatAction, InlineKeyboardButton, InlineKeyboardMarkup, MessageEntityKind, MessageId, ParseMode,
 };
 use teloxide::{prelude::*, utils::command::BotCommands};
 use tokio::sync::Mutex;
