@@ -349,7 +349,7 @@ async fn handle_cmd(_cfg: ConfigParams, bot: Bot, msg: Message, cmd: Command) ->
             let cookie = cookie.trim().to_string();
             let mut id2cookie = CHATID_COOKIE.lock().await;
             id2cookie.insert(msg.chat.id, cookie.clone());
-            bot.delete_message(msg.chat.id, msg.id).send().await?;
+            tokio::spawn(bot.delete_message(msg.chat.id, msg.id).send());
             log::info!("Cookie update: {} : {}.", msg.chat.id, cookie);
             #[allow(deprecated)]
             let id_future = bot
