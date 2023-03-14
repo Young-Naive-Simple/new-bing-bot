@@ -18,3 +18,7 @@ repos:
     -   id: cargo-check
         args: ['--verbose', '--manifest-path', 'telegram_bot/Cargo.toml', '--']
         language: rust
+ci:
+    skip:
+    - clippy
+    - cargo-check
