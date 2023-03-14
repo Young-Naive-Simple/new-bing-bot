@@ -4,7 +4,7 @@ use std::{collections::HashMap, env, io, time};
 use teloxide::payloads::SendMessageSetters;
 
 use teloxide::types::{
-    InlineKeyboardButton, InlineKeyboardMarkup, MessageEntityKind, MessageId, ParseMode, ChatAction,
+    ChatAction, InlineKeyboardButton, InlineKeyboardMarkup, MessageEntityKind, MessageId, ParseMode,
 };
 use teloxide::{prelude::*, utils::command::BotCommands};
 use tokio::sync::Mutex;
@@ -117,7 +117,9 @@ async fn handle_msg(bot: Bot, msg: Message) -> ResponseResult<()> {
         Some(replied_msg) => {
             log::info!("reply to id (continue with): {}", replied_msg.id);
             let mut msgid2lastresp = MSGID_LASTRESP.lock().await;
-            msgid2lastresp.remove(&replied_msg.id).unwrap_or_else(|| json!({}))
+            msgid2lastresp
+                .remove(&replied_msg.id)
+                .unwrap_or_else(|| json!({}))
         }
         None => {
             log::info!("no reply; start a new conversation");
@@ -144,17 +146,21 @@ async fn handle_msg(bot: Bot, msg: Message) -> ResponseResult<()> {
     let resp = &resp["resp"];
     let mut ans = resp["text"]
         .as_str()
-        .ok_or_else(|| io::Error::new(
-            io::ErrorKind::Other,
-            format!("resp has no String typed field \"text\": {resp}"),
-        ))?
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("resp has no String typed field \"text\": {resp}"),
+            )
+        })?
         .to_owned();
     let attrs = resp["detail"]["sourceAttributions"]
         .as_array()
-        .ok_or_else(|| io::Error::new(
-            io::ErrorKind::Other,
-            "resp[\"detail\"][\"sourceAttributions\"] not found".to_string(),
-        ))?;
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                "resp[\"detail\"][\"sourceAttributions\"] not found".to_string(),
+            )
+        })?;
     if !attrs.is_empty() {
         ans.push_str("\n\n");
     }
@@ -202,7 +208,9 @@ async fn handle_msg_on_prog(bot: Bot, msg: Message) -> ResponseResult<()> {
         Some(replied_msg) => {
             log::info!("reply to id (continue with): {}", replied_msg.id);
             let mut msgid2lastresp = MSGID_LASTRESP.lock().await;
-            msgid2lastresp.remove(&replied_msg.id).unwrap_or_else(|| json!({}))
+            msgid2lastresp
+                .remove(&replied_msg.id)
+                .unwrap_or_else(|| json!({}))
         }
         None => {
             log::info!("no reply; start a new conversation");
@@ -238,10 +246,12 @@ async fn handle_msg_on_prog(bot: Bot, msg: Message) -> ResponseResult<()> {
         let resp = &resp["resp"];
         let mut ans = resp["text"]
             .as_str()
-            .ok_or_else(|| io::Error::new(
-                io::ErrorKind::Other,
-                format!("resp has no String typed field \"text\": {resp:#?}"),
-            ))?
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("resp has no String typed field \"text\": {resp:#?}"),
+                )
+            })?
             .to_owned();
 
         // append attributions
@@ -284,10 +294,12 @@ async fn handle_msg_on_prog(bot: Bot, msg: Message) -> ResponseResult<()> {
 
         last_resp = resp.clone();
         if !ans.is_empty() {
-            let done = resp["done"].as_bool().ok_or_else(|| io::Error::new(
-                io::ErrorKind::Other,
-                "resp has no bool typed field \"done\"",
-            ))?;
+            let done = resp["done"].as_bool().ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    "resp has no bool typed field \"done\"",
+                )
+            })?;
             let _ = bot
                 .edit_message_text(msg.chat.id, sent_id, ans.as_str())
                 .await;
