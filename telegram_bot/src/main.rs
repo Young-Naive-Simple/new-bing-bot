@@ -183,7 +183,7 @@ async fn handle_msg_on_prog(cfg: ConfigParams, bot: Bot, msg: Message) -> Result
     let msg_str = msg
         .text()
         .context("msg.text is empty")?
-        .replace(("@".to_string() + &cfg.bot_username).as_str(), "")
+        .replace(&format!("@{}", cfg.bot_username), "")
         .trim()
         .to_string();
     let id2cookie = CHATID_COOKIE.lock().await;
@@ -213,7 +213,6 @@ async fn handle_msg_on_prog(cfg: ConfigParams, bot: Bot, msg: Message) -> Result
             json!({})
         }
     };
-    tokio::spawn(bot.send_chat_action(msg.chat.id, ChatAction::Typing).send());
 
     #[allow(deprecated)]
     let sent_id = bot
@@ -356,7 +355,7 @@ async fn handle_cmd(_cfg: ConfigParams, bot: Bot, msg: Message, cmd: Command) ->
             id2cookie.insert(msg.chat.id, cookie.clone());
             #[allow(deprecated)]
             let sent_id = bot
-                .send_message(msg.chat.id, "Your cookie is set to `{cookie}` .")
+                .send_message(msg.chat.id, format!("Your cookie is set to `{cookie}` ."))
                 .reply_to_message_id(msg.id)
                 .parse_mode(ParseMode::Markdown)
                 .await?
