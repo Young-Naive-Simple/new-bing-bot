@@ -4,18 +4,21 @@ use std::{collections::HashMap, env, io, time};
 use teloxide::payloads::SendMessageSetters;
 
 use teloxide::types::{
-    InlineKeyboardButton, InlineKeyboardMarkup, MessageEntityKind, MessageId, ParseMode, ChatAction,
+    ChatAction, InlineKeyboardButton, InlineKeyboardMarkup, MessageEntityKind, MessageId, ParseMode,
 };
 use teloxide::{prelude::*, utils::command::BotCommands};
 use tokio::sync::Mutex;
-
-static BOT_USERNAME: &str = "naive_bing_bot";
 
 static API_HOST: Lazy<String> = Lazy::new(|| env::var("API_HOST").unwrap());
 static CHATID_COOKIE: Lazy<Mutex<HashMap<ChatId, String>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 static MSGID_LASTRESP: Lazy<Mutex<HashMap<MessageId, serde_json::Value>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
+
+#[derive(Clone, Debug)]
+struct ConfigParams {
+    bot_username: String,
+}
 
 fn msg_mentioned(msg: &Message, username: &str) -> bool {
     match msg.parse_entities() {
@@ -52,6 +55,9 @@ async fn main() {
     log::info!("Starting command bot...");
 
     let bot = Bot::from_env();
+    let cfg_params = ConfigParams {
+        bot_username: bot.get_me().await.unwrap().username().to_string(),
+    };
     let handler = Update::filter_message()
         .branch(
             dptree::entry()
@@ -62,10 +68,10 @@ async fn main() {
         )
         .branch(
             // Filtering allow you to filter updates by some condition.
-            dptree::filter(|msg: Message| {
+            dptree::filter(|cfg: ConfigParams, msg: Message| {
                 msg.chat.is_private()
-                    || msg_mentioned(&msg, BOT_USERNAME)
-                    || msg_reply_to_username(&msg) == BOT_USERNAME
+                    || msg_mentioned(&msg, &cfg.bot_username)
+                    || msg_reply_to_username(&msg) == cfg.bot_username
             })
             // An endpoint is the last update handler.
             .endpoint(handle_msg_on_prog),
@@ -75,7 +81,7 @@ async fn main() {
         // Here you specify initial dependencies that all handlers will receive; they can be
         // database connections, configurations, and other auxiliary arguments. It is similar to
         // `actix_web::Extensions`.
-        // .dependencies(dptree::deps![parameters])
+        .dependencies(dptree::deps![cfg_params])
         // If no handler succeeded to handle an update, this closure will be called.
         .default_handler(|upd| async move {
             log::warn!("Unhandled update: {:?}", upd);
@@ -92,11 +98,13 @@ async fn main() {
     log::info!("Shuting down command bot...");
 }
 
-async fn handle_msg(bot: Bot, msg: Message) -> ResponseResult<()> {
+#[deprecated]
+#[allow(dead_code)]
+async fn handle_msg(cfg: ConfigParams, bot: Bot, msg: Message) -> ResponseResult<()> {
     let msg_str = msg
         .text()
         .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "msg.text is empty"))?
-        .replace(("@".to_string() + BOT_USERNAME).as_str(), "")
+        .replace(("@".to_string() + &cfg.bot_username).as_str(), "")
         .trim()
         .to_string();
     let id2cookie = CHATID_COOKIE.lock().await;
@@ -117,7 +125,10 @@ async fn handle_msg(bot: Bot, msg: Message) -> ResponseResult<()> {
         Some(replied_msg) => {
             log::info!("reply to id (continue with): {}", replied_msg.id);
             let mut msgid2lastresp = MSGID_LASTRESP.lock().await;
-            msgid2lastresp.remove(&replied_msg.id).unwrap_or_else(|| json!({}))
+            msgid2lastresp.remove(&replied_msg.id).unwrap_or_else(|| {
+                log::info!("cannot find last resp with msg id {}", replied_msg.id);
+                json!({})
+            })
         }
         None => {
             log::info!("no reply; start a new conversation");
@@ -144,17 +155,21 @@ async fn handle_msg(bot: Bot, msg: Message) -> ResponseResult<()> {
     let resp = &resp["resp"];
     let mut ans = resp["text"]
         .as_str()
-        .ok_or_else(|| io::Error::new(
-            io::ErrorKind::Other,
-            format!("resp has no String typed field \"text\": {resp}"),
-        ))?
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("resp has no String typed field \"text\": {resp}"),
+            )
+        })?
         .to_owned();
     let attrs = resp["detail"]["sourceAttributions"]
         .as_array()
-        .ok_or_else(|| io::Error::new(
-            io::ErrorKind::Other,
-            "resp[\"detail\"][\"sourceAttributions\"] not found".to_string(),
-        ))?;
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                "resp[\"detail\"][\"sourceAttributions\"] not found".to_string(),
+            )
+        })?;
     if !attrs.is_empty() {
         ans.push_str("\n\n");
     }
@@ -177,11 +192,11 @@ async fn handle_msg(bot: Bot, msg: Message) -> ResponseResult<()> {
     Ok(())
 }
 
-async fn handle_msg_on_prog(bot: Bot, msg: Message) -> ResponseResult<()> {
+async fn handle_msg_on_prog(cfg: ConfigParams, bot: Bot, msg: Message) -> ResponseResult<()> {
     let msg_str = msg
         .text()
         .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "msg.text is empty"))?
-        .replace(("@".to_string() + BOT_USERNAME).as_str(), "")
+        .replace(("@".to_string() + &cfg.bot_username).as_str(), "")
         .trim()
         .to_string();
     let id2cookie = CHATID_COOKIE.lock().await;
@@ -202,7 +217,9 @@ async fn handle_msg_on_prog(bot: Bot, msg: Message) -> ResponseResult<()> {
         Some(replied_msg) => {
             log::info!("reply to id (continue with): {}", replied_msg.id);
             let mut msgid2lastresp = MSGID_LASTRESP.lock().await;
-            msgid2lastresp.remove(&replied_msg.id).unwrap_or_else(|| json!({}))
+            msgid2lastresp
+                .remove(&replied_msg.id)
+                .unwrap_or_else(|| json!({}))
         }
         None => {
             log::info!("no reply; start a new conversation");
@@ -238,10 +255,12 @@ async fn handle_msg_on_prog(bot: Bot, msg: Message) -> ResponseResult<()> {
         let resp = &resp["resp"];
         let mut ans = resp["text"]
             .as_str()
-            .ok_or_else(|| io::Error::new(
-                io::ErrorKind::Other,
-                format!("resp has no String typed field \"text\": {resp:#?}"),
-            ))?
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("resp has no String typed field \"text\": {resp:#?}"),
+                )
+            })?
             .to_owned();
 
         // append attributions
@@ -284,10 +303,12 @@ async fn handle_msg_on_prog(bot: Bot, msg: Message) -> ResponseResult<()> {
 
         last_resp = resp.clone();
         if !ans.is_empty() {
-            let done = resp["done"].as_bool().ok_or_else(|| io::Error::new(
-                io::ErrorKind::Other,
-                "resp has no bool typed field \"done\"",
-            ))?;
+            let done = resp["done"].as_bool().ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    "resp has no bool typed field \"done\"",
+                )
+            })?;
             let _ = bot
                 .edit_message_text(msg.chat.id, sent_id, ans.as_str())
                 .await;
@@ -327,7 +348,12 @@ enum Command {
     Test,
 }
 
-async fn handle_cmd(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
+async fn handle_cmd(
+    _cfg: ConfigParams,
+    bot: Bot,
+    msg: Message,
+    cmd: Command,
+) -> ResponseResult<()> {
     log::info!("cmd: {:#?} , chatid: {}", cmd, msg.chat.id);
     match cmd {
         Command::Start => {
@@ -340,7 +366,7 @@ async fn handle_cmd(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> 
                 "\n\ncookie is the `_U` cookie of [www.bing.com](https://www.bing.com). Do NOT include `_U=`.\n\
                 \nIn private chat, the bot responds to messages directly.\n\
                 In group, the bot only responds to messages mentioning (at) it.\n\
-                In both case, reply to message of the latest response to continue a conversation.\n\
+                In both cases, reply to message of the latest response to continue a conversation.\n\
                 "
             );
             #[allow(deprecated)]
