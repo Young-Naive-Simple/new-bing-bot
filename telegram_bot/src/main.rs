@@ -2,7 +2,6 @@ use once_cell::sync::Lazy;
 use serde_json::json;
 use std::{collections::HashMap, env, io, time};
 use teloxide::payloads::SendMessageSetters;
-use teloxide::utils::command;
 
 use teloxide::types::{
     InlineKeyboardButton, InlineKeyboardMarkup, MessageEntityKind, MessageId, ParseMode, ChatAction,
