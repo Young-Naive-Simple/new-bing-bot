@@ -1,10 +1,10 @@
+use anyhow::{Context, Result};
 use once_cell::sync::Lazy;
 use serde_json::json;
-use std::{collections::HashMap, env, io, time};
+use std::{collections::HashMap, env, time};
 use teloxide::payloads::SendMessageSetters;
-
 use teloxide::types::{
-    ChatAction, InlineKeyboardButton, InlineKeyboardMarkup, MessageEntityKind, MessageId, ParseMode,
+    InlineKeyboardButton, InlineKeyboardMarkup, MessageEntityKind, MessageId, ParseMode,
 };
 use teloxide::{prelude::*, utils::command::BotCommands};
 use tokio::sync::Mutex;
@@ -17,6 +17,7 @@ static MSGID_LASTRESP: Lazy<Mutex<HashMap<MessageId, serde_json::Value>>> =
 
 #[derive(Clone, Debug)]
 struct ConfigParams {
+    bot_id: UserId,
     bot_username: String,
 }
 
@@ -36,17 +37,8 @@ fn msg_mentioned(msg: &Message, username: &str) -> bool {
     }
 }
 
-fn msg_reply_to_username(msg: &Message) -> &str {
-    match msg.reply_to_message() {
-        Some(replied) => match replied.from() {
-            Some(replied_from) => match replied_from.username.as_ref() {
-                Some(username) => username.as_str(),
-                None => "",
-            },
-            None => "",
-        },
-        None => "",
-    }
+fn msg_reply_to_id(msg: &Message) -> Option<UserId> {
+    msg.reply_to_message().and_then(|replied| replied.from().map(|replied_from| replied_from.id))
 }
 
 #[tokio::main]
@@ -57,6 +49,7 @@ async fn main() {
     let bot = Bot::from_env();
     let cfg_params = ConfigParams {
         bot_username: bot.get_me().await.unwrap().username().to_string(),
+        bot_id: bot.get_me().send().await.unwrap().id,
     };
     let handler = Update::filter_message()
         .branch(
@@ -71,7 +64,7 @@ async fn main() {
             dptree::filter(|cfg: ConfigParams, msg: Message| {
                 msg.chat.is_private()
                     || msg_mentioned(&msg, &cfg.bot_username)
-                    || msg_reply_to_username(&msg) == cfg.bot_username
+                    || msg_reply_to_id(&msg) == Some(cfg.bot_id)
             })
             // An endpoint is the last update handler.
             .endpoint(handle_msg_on_prog),
@@ -100,11 +93,11 @@ async fn main() {
 
 #[deprecated]
 #[allow(dead_code)]
-async fn handle_msg(cfg: ConfigParams, bot: Bot, msg: Message) -> ResponseResult<()> {
+async fn handle_msg(cfg: ConfigParams, bot: Bot, msg: Message) -> Result<()> {
     let msg_str = msg
         .text()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "msg.text is empty"))?
-        .replace(("@".to_string() + &cfg.bot_username).as_str(), "")
+        .context("msg.text is empty")?
+        .replace(&format!("@{}", cfg.bot_username), "")
         .trim()
         .to_string();
     let id2cookie = CHATID_COOKIE.lock().await;
@@ -155,21 +148,11 @@ async fn handle_msg(cfg: ConfigParams, bot: Bot, msg: Message) -> ResponseResult
     let resp = &resp["resp"];
     let mut ans = resp["text"]
         .as_str()
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("resp has no String typed field \"text\": {resp}"),
-            )
-        })?
+        .context(format!("resp has no String typed field \"text\": {resp}"))?
         .to_owned();
     let attrs = resp["detail"]["sourceAttributions"]
         .as_array()
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                "resp[\"detail\"][\"sourceAttributions\"] not found".to_string(),
-            )
-        })?;
+        .context("resp[\"detail\"][\"sourceAttributions\"] not found")?;
     if !attrs.is_empty() {
         ans.push_str("\n\n");
     }
@@ -192,11 +175,11 @@ async fn handle_msg(cfg: ConfigParams, bot: Bot, msg: Message) -> ResponseResult
     Ok(())
 }
 
-async fn handle_msg_on_prog(cfg: ConfigParams, bot: Bot, msg: Message) -> ResponseResult<()> {
+async fn handle_msg_on_prog(cfg: ConfigParams, bot: Bot, msg: Message) -> Result<()> {
     let msg_str = msg
         .text()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "msg.text is empty"))?
-        .replace(("@".to_string() + &cfg.bot_username).as_str(), "")
+        .context("msg.text is empty")?
+        .replace(&format!("@{}", cfg.bot_username), "")
         .trim()
         .to_string();
     let id2cookie = CHATID_COOKIE.lock().await;
@@ -226,7 +209,6 @@ async fn handle_msg_on_prog(cfg: ConfigParams, bot: Bot, msg: Message) -> Respon
             json!({})
         }
     };
-    tokio::spawn(bot.send_chat_action(msg.chat.id, ChatAction::Typing).send());
 
     #[allow(deprecated)]
     let sent_id = bot
@@ -255,12 +237,9 @@ async fn handle_msg_on_prog(cfg: ConfigParams, bot: Bot, msg: Message) -> Respon
         let resp = &resp["resp"];
         let mut ans = resp["text"]
             .as_str()
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("resp has no String typed field \"text\": {resp:#?}"),
-                )
-            })?
+            .context(format!(
+                "resp has no String typed field \"text\": {resp:#?}"
+            ))?
             .to_owned();
 
         // append attributions
@@ -303,12 +282,9 @@ async fn handle_msg_on_prog(cfg: ConfigParams, bot: Bot, msg: Message) -> Respon
 
         last_resp = resp.clone();
         if !ans.is_empty() {
-            let done = resp["done"].as_bool().ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    "resp has no bool typed field \"done\"",
-                )
-            })?;
+            let done = resp["done"]
+                .as_bool()
+                .context("resp has no bool typed field \"done\"")?;
             let _ = bot
                 .edit_message_text(msg.chat.id, sent_id, ans.as_str())
                 .await;
@@ -348,12 +324,7 @@ enum Command {
     Test,
 }
 
-async fn handle_cmd(
-    _cfg: ConfigParams,
-    bot: Bot,
-    msg: Message,
-    cmd: Command,
-) -> ResponseResult<()> {
+async fn handle_cmd(_cfg: ConfigParams, bot: Bot, msg: Message, cmd: Command) -> Result<()> {
     log::info!("cmd: {:#?} , chatid: {}", cmd, msg.chat.id);
     match cmd {
         Command::Start => {
@@ -379,14 +350,17 @@ async fn handle_cmd(
             let mut id2cookie = CHATID_COOKIE.lock().await;
             id2cookie.insert(msg.chat.id, cookie.clone());
             #[allow(deprecated)]
-            let sent_id = bot
-                .send_message(msg.chat.id, format!("Your cookie is set to `{cookie}` ."))
+            let id_future = bot
+                .send_message(msg.chat.id, "Your cookie is updated.")
                 .reply_to_message_id(msg.id)
-                .parse_mode(ParseMode::Markdown)
-                .await?
-                .id;
-            bot.delete_message(msg.chat.id, sent_id).await?;
-            bot.delete_message(msg.chat.id, msg.id).await?;
+                .parse_mode(ParseMode::Markdown);
+            bot.delete_message(msg.chat.id, msg.id).send().await?;
+            tokio::spawn(async move {
+                let msg_id = id_future.await?.id;
+                tokio::time::sleep(time::Duration::from_secs(5)).await;
+                bot.delete_message(msg.chat.id, msg_id).send().await?;
+                Ok::<(), anyhow::Error>(())
+            });
         }
         Command::Test => {
             log::info!("received: {msg:#?}");
