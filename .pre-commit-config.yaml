@@ -1,3 +1,4 @@
+language: rust
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
@@ -13,4 +14,4 @@ repos:
         args: ['--verbose', '--manifest-path', 'telegram_bot/Cargo.toml', '--']
     -   id: clippy
         args: ['--verbose', '--manifest-path', 'telegram_bot/Cargo.toml', '--']
-    # -   id: cargo-check
+    -   id: cargo-check
