@@ -357,7 +357,6 @@ async fn handle_cmd(_cfg: ConfigParams, bot: Bot, msg: Message, cmd: Command) ->
                     msg.chat.id,
                     format!("Your cookie is updated to `{cookie}`."),
                 )
-                .reply_to_message_id(msg.id)
                 .parse_mode(ParseMode::Markdown);
             tokio::spawn(async move {
                 let msg_id = id_future.await?.id;
