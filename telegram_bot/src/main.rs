@@ -78,7 +78,7 @@ async fn main() {
         .dependencies(dptree::deps![cfg_params])
         // If no handler succeeded to handle an update, this closure will be called.
         .default_handler(|upd| async move {
-            log::warn!("Unhandled update: {:?}", upd);
+            log::debug!("Unhandled update: {:?}", upd);
         })
         // If the dispatcher fails for some reason, execute this handler.
         .error_handler(LoggingErrorHandler::with_custom_text(
@@ -338,8 +338,7 @@ async fn handle_cmd(_cfg: ConfigParams, bot: Bot, msg: Message, cmd: Command) ->
                 "\n\ncookie is the `_U` cookie of [www.bing.com](https://www.bing.com). Do NOT include `_U=`.\n\
                 \nIn private chat, the bot responds to messages directly.\n\
                 In group, the bot only responds to messages mentioning (at) it.\n\
-                In both cases, reply to message of the latest response to continue a conversation.\n\
-                "
+                In both cases, reply to message of the latest response to continue a conversation."
             );
             #[allow(deprecated)]
             bot.send_message(msg.chat.id, help_msg)
@@ -350,15 +349,18 @@ async fn handle_cmd(_cfg: ConfigParams, bot: Bot, msg: Message, cmd: Command) ->
             let cookie = cookie.trim().to_string();
             let mut id2cookie = CHATID_COOKIE.lock().await;
             id2cookie.insert(msg.chat.id, cookie.clone());
+            tokio::spawn(bot.delete_message(msg.chat.id, msg.id).send());
+            log::info!("Cookie update: {} : {}.", msg.chat.id, cookie);
             #[allow(deprecated)]
             let id_future = bot
-                .send_message(msg.chat.id, "Your cookie is updated.")
-                .reply_to_message_id(msg.id)
+                .send_message(
+                    msg.chat.id,
+                    format!("Your cookie is updated to `{cookie}`."),
+                )
                 .parse_mode(ParseMode::Markdown);
-            bot.delete_message(msg.chat.id, msg.id).send().await?;
             tokio::spawn(async move {
                 let msg_id = id_future.await?.id;
-                tokio::time::sleep(time::Duration::from_secs(5)).await;
+                tokio::time::sleep(time::Duration::from_secs(3)).await;
                 bot.delete_message(msg.chat.id, msg_id).send().await?;
                 Ok::<(), anyhow::Error>(())
             });
