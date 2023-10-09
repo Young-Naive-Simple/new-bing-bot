@@ -1,13 +1,13 @@
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
+    rev: v4.5.0
     hooks:
     -   id: check-yaml
     -   id: end-of-file-fixer
     -   id: trailing-whitespace
 
 -   repo: https://github.com/Young-Naive-Simple/pre-commit-rust
-    rev: master
+    rev: 3a8de64acc969112746489e5ec1f0b13e00d871e
     hooks:
     -   id: fmt
         args: ['--verbose', '--manifest-path', 'telegram_bot/Cargo.toml', '--']
